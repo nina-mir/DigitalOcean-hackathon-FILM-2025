@@ -126,6 +126,7 @@ def handle_user_input():
             with st.spinner("🔍 Processing your query..."):
                 response = process_user_message(user_input)
                 display_response(response)
+        st.chat_input("Ask me about SF film locations...")
 
 def process_user_message(user_input: str):
     """Send message to coordinator and get response"""
