@@ -107,9 +107,12 @@ def handle_user_input():
         user_input = st.session_state.pending_query
         # Clear it so it doesn't repeat
         del st.session_state.pending_query
-    else:
-        # Normal chat input
-        user_input = st.chat_input("Ask me about SF film locations...")
+
+    # Normal chat input
+    chat_input = st.chat_input("Ask me about SF film locations...")
+
+    # Use either the pending query or the chat input
+    user_input = user_input or chat_input
     
     if user_input:
         # Add user message to history
@@ -127,7 +130,6 @@ def handle_user_input():
             with st.spinner("🔍 Processing your query..."):
                 response = process_user_message(user_input)
                 display_response(response)
-        st.chat_input("Ask me about SF film locations...")
 
 def process_user_message(user_input: str):
     """Send message to coordinator and get response"""
