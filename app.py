@@ -2,6 +2,7 @@ import streamlit as st
 from src.chatbot_coordinator import ChatbotCoordinator
 from src.response_formatter import ResponseFormatter
 import pandas as pd
+import geopandas as gpd
 
 # Page config 
 st.set_page_config(
@@ -168,6 +169,31 @@ def process_user_message(user_input: str):
             'type': 'error'
         }
 
+def prepare_geodataframe_for_display(df):
+    """
+    Prepare a GeoDataFrame for Streamlit display by converting geometry to WKT.
+    
+    Args:
+        df: DataFrame or GeoDataFrame to prepare
+        
+    Returns:
+        Regular DataFrame with geometry as string (if it was a GeoDataFrame)
+    """
+    if not isinstance(df, gpd.GeoDataFrame):
+        return df
+    
+    display_df = df.copy()
+    
+    # Convert geometry column to WKT string
+    if 'geometry' in display_df.columns:
+        display_df['geometry'] = display_df['geometry'].apply(
+            lambda geom: geom.wkt if geom is not None else None
+        )
+    
+    # Convert to regular DataFrame to avoid any GeoDataFrame-specific issues
+    return pd.DataFrame(display_df)
+
+
 def display_response(response):
     """Display formatted response"""
     # Display text content
@@ -177,21 +203,25 @@ def display_response(response):
     if 'dataframe' in response:
         df = response['dataframe']
         
+        # Convert GeoDataFrame to regular DataFrame for display
+        display_df = prepare_geodataframe_for_display(df)
+        
         # Show dataframe
-        if len(df) > 20:
-            with st.expander(f"📊 View All {len(df)} Results", expanded=False):
-                st.dataframe(df, use_container_width=True)
+        if len(display_df) > 20:
+            with st.expander(f"📊 View All {len(display_df)} Results", expanded=False):
+                st.dataframe(display_df, width='stretch')  # Fixed deprecation warning
         else:
-            st.dataframe(df, use_container_width=True)
+            st.dataframe(display_df, width='stretch')  # Fixed deprecation warning
         
         # Add download button
-        csv = df.to_csv(index=False)
+        # Use the display_df (converted) for CSV to avoid geometry issues
+        csv = display_df.to_csv(index=False)
         st.download_button(
             label="📥 Download as CSV",
             data=csv,
             file_name="query_results.csv",
             mime="text/csv",
-            key=f"download_{hash(str(df))}"  # Unique key
+            key=f"download_{hash(str(display_df))}"  # Unique key
         )
     
     # Display map if present
@@ -204,7 +234,6 @@ def display_response(response):
         "content": response['content'],
         **{k: v for k, v in response.items() if k != 'content'}
     })
-
 
 def display_sidebar():
     """Enhanced sidebar with examples and stats"""
