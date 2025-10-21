@@ -359,7 +359,7 @@ class QueryProcessor:
                     map_gen = MapGenerator()
                     map_obj = map_gen.create_point_map(
                         analysis['location_data'],
-                        title=execution_result.get('summary', 'SF Film Locations')
+                        title=execution_result["data"].get('summary', 'SF Film Locations')
                     )
                     results["map"] = map_obj
                     results["map_html"] = map_obj._repr_html_()
