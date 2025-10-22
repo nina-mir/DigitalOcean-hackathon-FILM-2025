@@ -1,4 +1,4 @@
-# Code Generation Prompt — GeoPandas (Complete)
+# Code Generation Prompt — GeoPandas
 
 ## Purpose
 
@@ -54,13 +54,26 @@ Return a **single** JSON object:
 
 5) Boolean Masks for Actor Filters
    • Build masks on the **original** columns using `.astype(str).str.contains(..., na=False)` and combine across Actor_1–3 with `.any(axis=1)`; then `.loc[mask]`.
+
+6) ⚠️ CRITICAL: INDEX ALIGNMENT FOR FILTERING (MUST FOLLOW)
+   • **NEVER** use `clean_column_data()` to create a boolean mask or filter criteria.
+   • **ALWAYS** build boolean masks directly on the original DataFrame columns.
+   • **NEVER** filter a series first, then use it as a mask on the full DataFrame.
+   • If you need to filter by a column value (e.g., Director == 'Hitchcock'), create the mask directly:
+     ✅ CORRECT: `mask = gdf_copy['Director'].str.contains('Hitchcock', case=False, na=False)`
+     ❌ WRONG:   `cleaned = clean_column_data(gdf_copy['Director']); mask = cleaned.str.contains(...)`
 ```
 
 ### Standard Data Cleaning Function (string/categorical only)
 
 ```python
 def clean_column_data(series):
-    """Remove empty/null/whitespace-only/stringy-null values from a pandas Series (strings/categoricals only)."""
+    """Remove empty/null/whitespace-only/stringy-null values from a pandas Series (strings/categoricals only).
+    
+    ⚠️ WARNING: This function returns a FILTERED series with fewer rows.
+    DO NOT use its output as a boolean mask for the original DataFrame.
+    Only use this for final result cleaning AFTER filtering is complete.
+    """
     import pandas as pd
     cleaned = series.astype(str)
     exclude = (
@@ -71,6 +84,33 @@ def clean_column_data(series):
     )
     # Return original dtype Series filtered by the boolean mask, preserving index alignment
     return series[~exclude]
+```
+
+### ⚠️ CRITICAL: Safe Filtering Patterns (MUST USE)
+
+#### ❌ WRONG - Breaks Index Alignment
+```python
+# DO NOT DO THIS - causes "Unalignable boolean Series" error
+director_cleaned = clean_column_data(gdf_copy['Director'])  # Returns filtered series
+director_mask = director_cleaned.str.contains('Hitchcock', case=False, na=False)  # Mask with reduced index
+selected_films = gdf_copy.loc[director_mask]  # ❌ ERROR: index mismatch!
+```
+
+#### ✅ CORRECT - Maintains Index Alignment
+```python
+# Method 1: Direct mask creation (PREFERRED)
+director_mask = (
+    gdf_copy['Director'].notna() &
+    gdf_copy['Director'].astype(str).str.strip().ne('') &
+    ~gdf_copy['Director'].astype(str).str.lower().isin(['none', 'nan', 'null']) &
+    gdf_copy['Director'].astype(str).str.contains('Hitchcock', case=False, na=False)
+)
+selected_films = gdf_copy.loc[director_mask]
+
+# Method 2: Filter first, THEN clean results (for final output only)
+selected_films = gdf_copy.loc[director_mask]
+# Now safe to use clean_column_data on the result
+locations = clean_column_data(selected_films['Locations'])
 ```
 
 ### Usage Examples (safe patterns)
@@ -91,6 +131,21 @@ mask = (
       .any(axis=1)
 )
 selected = gdf_copy.loc[mask]
+
+# Safe director filtering (CORRECT PATTERN)
+director_name = 'Hitchcock'
+director_mask = (
+    gdf_copy['Director'].notna() &
+    gdf_copy['Director'].astype(str).str.strip().ne('') &
+    ~gdf_copy['Director'].astype(str).str.lower().isin(['none', 'nan', 'null']) &
+    gdf_copy['Director'].astype(str).str.contains(director_name, case=False, na=False)
+)
+selected_films = gdf_copy.loc[director_mask]
+
+# Clean locations AFTER filtering (safe because applied to filtered result)
+locations = selected_films['Locations'].dropna()
+locations = locations[locations.astype(str).str.strip() != '']
+locations = locations[~locations.astype(str).str.lower().isin(['none', 'nan', 'null'])]
 ```
 
 ## Actor Filters: Safe Boolean Masks (MUST)
@@ -109,7 +164,7 @@ selected_rows = gdf_copy.loc[mask]
 
 **Do not** pre‑clean actor columns before building the mask; use `na=False` so mask and frame indexes align.
 
-## Hybrid Film→Locations Pattern (MUST for “films starring X **and all their locations**”)
+## Hybrid Film→Locations Pattern (MUST for "films starring X **and all their locations**")
 
 ```python
 # 1) Select films (film-level)
@@ -187,9 +242,10 @@ counts_by_year = film_df.groupby('Year')['Title'].nunique()
 • Canonical `except Exception as e:` must build a closed `error_result` dict, then log (UTF‑8), then return.
 • One return per path, always the standardized dict (`data`, `summary`, `metadata`).
 • Do not place `with open(...)` **inside** a dict literal. Logging must follow the closed dict.
-• Use type‑aware cleaning: numeric via `to_numeric` + `dropna`; string via `clean_column_data()`.
+• Use type‑aware cleaning: numeric via `to_numeric` + `dropna`; string via direct mask creation (NOT clean_column_data() for filtering).
 • The generated Python should be parsable by `ast.parse(...)`.
 • `code` field must be non‑empty (actual executable code) in the output JSON.
+• ⚠️ NEVER use clean_column_data() output as a boolean mask - always build masks on original DataFrame.
 ```
 
 ---
@@ -207,7 +263,11 @@ def process_sf_film_query(gdf):
     import geopandas as gpd
 
     def clean_column_data(series):
-        """String/categorical cleaner: remove empty/null/whitespace and stringy nulls, preserving index alignment."""
+        """String/categorical cleaner: remove empty/null/whitespace and stringy nulls, preserving index alignment.
+        
+        ⚠️ WARNING: Returns a FILTERED series. DO NOT use for creating boolean masks.
+        Only use for final result cleaning AFTER all filtering is complete.
+        """
         cleaned = series.astype(str)
         exclude = (
             (cleaned == '') |
@@ -226,6 +286,7 @@ def process_sf_film_query(gdf):
         #   • Film‑level actor frequency → see Actor Frequency (Top‑N) section above
         #   • Films starring X + all locations → see Hybrid Film→Locations section
         #   • Year counts → see Year → #Distinct Films section
+        #   • Director filtering → see Safe director filtering pattern in Usage Examples
         result_data = None
         summary = "No implementation selected."
         metadata = {

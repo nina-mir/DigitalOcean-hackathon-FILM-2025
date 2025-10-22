@@ -3,11 +3,12 @@ from src.chatbot_coordinator import ChatbotCoordinator
 from src.response_formatter import ResponseFormatter
 import pandas as pd
 import geopandas as gpd
+import json
 
 # Page config 
 st.set_page_config(
     page_title="SF Film Locations Chat",
-    page_icon="🎬🌉🌁😶‍🌫️🌫️👩🏽‍💻",
+    page_icon="🎬🌉🌍😶‍🌫️🌫️👩🏽‍💻",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -52,6 +53,45 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
+
+def make_hashable(obj):
+    """
+    Convert unhashable types (lists, dicts with lists) to hashable types.
+    This is needed for Streamlit's session_state which requires hashable objects.
+    
+    Args:
+        obj: Any object that might contain unhashable types
+        
+    Returns:
+        A hashable version of the object (or a JSON string for complex objects)
+    """
+    if obj is None:
+        return None
+    
+    # If it's a DataFrame or GeoDataFrame, convert to JSON string
+    if isinstance(obj, (pd.DataFrame, gpd.GeoDataFrame)):
+        return obj.to_json()
+    
+    # If it's a dict, recursively convert values
+    if isinstance(obj, dict):
+        try:
+            # Try to JSON serialize it - if it works, return JSON string
+            return json.dumps(obj, default=str, sort_keys=True)
+        except:
+            # If serialization fails, convert each value individually
+            return {k: make_hashable(v) for k, v in obj.items()}
+    
+    # If it's a list, convert to tuple (hashable)
+    if isinstance(obj, list):
+        return tuple(make_hashable(item) for item in obj)
+    
+    # If it's already hashable, return as-is
+    try:
+        hash(obj)
+        return obj
+    except TypeError:
+        # Last resort: convert to string
+        return str(obj)
 
 
 # Initialize session state
@@ -149,8 +189,9 @@ def process_user_message(user_input: str):
         print(f"🔍 APP: Result type: {result.get('type')}")
         print(f"🔍 APP: Result keys: {result.keys()}")
         
-        # Store result for follow-ups
-        st.session_state.last_result = result
+        # 🔧 FIX: Convert result to hashable before storing
+        # Store a simplified/hashable version for session state
+        st.session_state.last_result = make_hashable(result)
         
         # Format for display
         print(f"🔍 APP: Calling formatter.format_response()")
@@ -211,31 +252,43 @@ def display_response(response):
         # Show dataframe
         if len(display_df) > 20:
             with st.expander(f"📊 View All {len(display_df)} Results", expanded=False):
-                st.dataframe(display_df, width='stretch')  # Fixed deprecation warning
+                st.dataframe(display_df, use_container_width=True)
         else:
-            st.dataframe(display_df, width='stretch')  # Fixed deprecation warning
+            st.dataframe(display_df, use_container_width=True)
+        
+        # 🔧 FIX: Use a simpler unique key that doesn't hash the dataframe
+        import time
+        unique_key = f"download_{len(display_df)}_{int(time.time() * 1000000)}"
         
         # Add download button
-        # Use the display_df (converted) for CSV to avoid geometry issues
         csv = display_df.to_csv(index=False)
         st.download_button(
             label="📥 Download as CSV",
             data=csv,
             file_name="query_results.csv",
             mime="text/csv",
-            key=f"download_{hash(str(display_df))}"  # Unique key
+            key=unique_key
         )
     
     # Display map if present
     if 'map_html' in response:
         st.components.v1.html(response['map_html'], height=500)
     
-    # Add response to history
-    st.session_state.messages.append({
+    # 🔧 FIX: Store a hashable version of the response
+    # Store only the essential parts, not complex objects
+    message_to_store = {
         "role": "assistant",
-        "content": response['content'],
-        **{k: v for k, v in response.items() if k != 'content'}
-    })
+        "content": response['content']
+    }
+    
+    # Only add dataframe and map_html if present (but store them as-is, not as hashable)
+    # Streamlit can handle these specific types
+    if 'dataframe' in response:
+        message_to_store['dataframe'] = response['dataframe']
+    if 'map_html' in response:
+        message_to_store['map_html'] = response['map_html']
+    
+    st.session_state.messages.append(message_to_store)
 
 def display_sidebar():
     """Enhanced sidebar with examples and stats"""
@@ -252,10 +305,11 @@ def display_sidebar():
             ("🎬", "Films with 'matrix' in the title")
         ]
         
-        for emoji, query in example_queries:
+        for idx, (emoji, query) in enumerate(example_queries):
+            # 🔧 FIX: Use index instead of hash for button keys
             if st.button(
                 f"{emoji} {query}", 
-                key=f"example_{hash(query)}", 
+                key=f"example_{idx}",  # Simple index-based key
                 use_container_width=True
             ):
                 st.session_state.pending_query = query

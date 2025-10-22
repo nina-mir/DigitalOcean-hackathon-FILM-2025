@@ -14,54 +14,76 @@ class MapGenerator:
         self.default_center = [37.7749, -122.4194]  # SF coordinates
     
     def create_point_map(self, location_data: List[Dict], 
-                         title: str = "SF Film Locations") -> folium.Map:
-        """
-        Create a simple point map from standardized location data.
-        
-        Args:
-            location_data: List of dicts with 'location_name', 'geometry', 'metadata'
-            title: Map title
-            
-        Returns:
-            folium.Map object
-        """
+                     title: str = "SF Film Locations") -> folium.Map:
+        """Create point map, combining duplicate locations"""
         if not location_data:
             return self._create_empty_map(title)
         
-        # Calculate center from data
-        lats = [loc['geometry'].y for loc in location_data]
-        lons = [loc['geometry'].x for loc in location_data]
-        # due to occassionally wrong data in the database, let's comemnt the following line for now
-        # center = [sum(lats)/len(lats), sum(lons)/len(lons)]
-        # instead let's use this forced centering for now 
-          # Force SF center
         sf_center = [37.7749, -122.4194]
-        # Create map
-        m = folium.Map(location=sf_center, zoom_start=13)       
-       
-        # Add markers
+        m = folium.Map(location=sf_center, zoom_start=13)
+        
+        # 🔧 GROUP by location name to handle duplicates
+        from collections import defaultdict
+        grouped_locations = defaultdict(list)
+        
         for loc_data in location_data:
-            geom = loc_data['geometry']
-            metadata = loc_data.get('metadata', {})
+            loc_name = loc_data['location_name']
+            grouped_locations[loc_name].append(loc_data)
+        
+        # Add markers (one per unique location)
+        for loc_name, loc_list in grouped_locations.items():
+            # Use first entry's geometry (they should all be the same)
+            geom = loc_list[0]['geometry']
             
-            # Build popup with nice formatting
-            popup_html = f"<b>{loc_data['location_name']}</b><br><br>"
+            # Build popup with ALL films at this location
+            popup_html = f"<b>{loc_name}</b><br><br>"
             
-            # Add metadata (filter out None/NaN values)
-            for key, val in metadata.items():
-                if pd.notna(val) and val != '' and val != 'None':
-                    # Capitalize key for display
-                    display_key = key.replace('_', ' ').title()
-                    popup_html += f"<b>{display_key}:</b> {val}<br>"
+            if len(loc_list) > 1:
+                popup_html += f"<b>🎬 Featured in {len(loc_list)} films:</b><br><br>"
+            
+            for i, loc_data in enumerate(loc_list, 1):
+                metadata = loc_data.get('metadata', {})
+                
+                # Add film info
+                if len(loc_list) > 1:
+                    popup_html += f"<b>Film {i}:</b> "
+                
+                film = metadata.get('Film', 'Unknown')
+                popup_html += f"{film}<br>"
+                
+                # Add other metadata (excluding Locations to avoid redundancy)
+                for key, val in metadata.items():
+                    if key == 'Film' or key == 'Locations':
+                        continue
+                    if val is None or (not isinstance(val, list) and pd.isna(val)):
+                        continue
+                        
+                    if isinstance(val, list):
+                        if val:
+                            display_val = ', '.join(str(v) for v in val)
+                            display_key = key.replace('_', ' ').title()
+                            popup_html += f"<b>{display_key}:</b> {display_val}<br>"
+                    elif val != '' and val != 'None':
+                        display_key = key.replace('_', ' ').title()
+                        popup_html += f"<b>{display_key}:</b> {val}<br>"
+                
+                if i < len(loc_list):
+                    popup_html += "<br>"  # Space between films
+            
+            # Choose icon color based on number of films
+            if len(loc_list) > 1:
+                icon_color = 'blue'  # Multiple films = blue
+            else:
+                icon_color = 'red'   # Single film = red
             
             folium.Marker(
                 location=[geom.y, geom.x],
-                popup=folium.Popup(popup_html, max_width=300),
-                tooltip=loc_data['location_name'],
-                icon=folium.Icon(color='red', icon='film', prefix='fa')
+                popup=folium.Popup(popup_html, max_width=350),
+                tooltip=f"{loc_name} ({len(loc_list)} film{'s' if len(loc_list) > 1 else ''})",
+                icon=folium.Icon(color=icon_color, icon='film', prefix='fa')
             ).add_to(m)
         
-        # Add title
+        # Update title to show unique locations
         title_html = f'''
         <div style="position: fixed; 
                     top: 10px; left: 50px; right: 50px; 
@@ -73,14 +95,15 @@ class MapGenerator:
                     text-align: center;">
             <h3 style="margin:0;">{title}</h3>
             <p style="margin:5px 0 0 0; font-size:14px; color:#666;">
-                {len(location_data)} location{'' if len(location_data) == 1 else 's'} found
+                {len(grouped_locations)} unique location{'' if len(grouped_locations) == 1 else 's'} 
+                • {len(location_data)} total appearance{'' if len(location_data) == 1 else 's'}
             </p>
         </div>
         '''
         m.get_root().html.add_child(folium.Element(title_html))
         
         return m
-    
+        
     def _create_empty_map(self, title: str) -> folium.Map:
         """Create fallback map when no locations found"""
         m = folium.Map(location=self.default_center, zoom_start=12)

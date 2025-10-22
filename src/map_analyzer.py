@@ -41,7 +41,13 @@ class MapDataAnalyzer:
             }
         """
         data = execution_result.get('data')
-        
+
+        # DEBUG: Print what is being analyzed
+        print(f"🔍 ANALYZER: data type = {type(data)}")
+        if isinstance(data, list) and data:
+            print(f"🔍 ANALYZER: list with {len(data)} items")
+            print(f"🔍 ANALYZER: first item = {data[0]}")
+            
         # Check if query mentions locations
         location_keywords = ['location', 'locations', 'place', 'places', 'where', 'map', 'filmed', 'shot']
         query_lower = user_query.lower()
@@ -195,18 +201,25 @@ class MapDataAnalyzer:
         locations = []
         for item in data:
             # Look for location field (case-insensitive)
-            loc_name = None
+            loc_value = None
             for key in item.keys():
                 if key.lower() in ['locations', 'location', 'place']:
-                    loc_name = item[key]
+                    loc_value = item[key]
                     break
             
-            if loc_name and loc_name in self.location_map:
-                locations.append({
-                    'location_name': loc_name,
-                    'geometry': self.location_map[loc_name]['geometry'],
-                    'metadata': item
-                })
+            # Handle both single location (string) and multiple locations (list)
+            if loc_value:
+                # Convert to list if it's a string
+                loc_names = loc_value if isinstance(loc_value, list) else [loc_value]
+                
+                # Process each location name
+                for loc_name in loc_names:
+                    if isinstance(loc_name, str) and loc_name in self.location_map:
+                        locations.append({
+                            'location_name': loc_name,
+                            'geometry': self.location_map[loc_name]['geometry'],
+                            'metadata': item
+                        })
         
         return locations if locations else None
     
