@@ -302,7 +302,30 @@ def display_response(response):
 
 def display_sidebar():
     """Enhanced sidebar with examples and stats"""
+    # Create a clickable GitHub logo in sidebar
+    github_logo_html = """
+    <a href="https://github.com/nina-mir/DigitalOcean-hackathon-FILM-2025" target="_blank">
+        <img src="/github-mark/github-mark-white.svg" alt="GitHub" width="30" style="vertical-align:middle;margin-bottom:5px;"/>
+    </a>
+    """
+
+    github_logo_html = """
+    <a style="text-decoration:none;"
+    href="https://github.com/nina-mir/DigitalOcean-hackathon-FILM-2025" target="_blank">
+    <img src="https://cdn.jsdelivr.net/npm/simple-icons@v9/icons/github.svg" 
+         alt="GitHub" width="30" style="vertical-align:middle;margin-bottom:5px;"/>
+    <span style="background-color:pink;padding:0.2rem;border-radius: 15px;">View on GitHub</span>
+</a>
+"""
+
     with st.sidebar:
+        # st.sidebar.image("./github-mark/github-mark.png", caption="GitHub", width=30) 
+        st.sidebar.markdown(github_logo_html, unsafe_allow_html=True)
+        # st.markdown(
+        # "[⭐ View on GitHub](https://github.com/nina-mir/DigitalOcean-hackathon-FILM-2025)",
+        # unsafe_allow_html=True
+        # )
+
         st.markdown("### 🎯 Quick Start")
 
         example_queries = [
