@@ -310,7 +310,7 @@ def display_sidebar():
     """
 
     github_logo_html = """
-    <a style="text-decoration:none;"
+    <a style="text-decoration:none; display:flex;justify-content:center; gap:1rem;"
     href="https://github.com/nina-mir/DigitalOcean-hackathon-FILM-2025" target="_blank">
     <img src="https://cdn.jsdelivr.net/npm/simple-icons@v9/icons/github.svg" 
          alt="GitHub" width="30" style="vertical-align:middle;margin-bottom:5px;"/>
@@ -325,6 +325,22 @@ def display_sidebar():
         # "[⭐ View on GitHub](https://github.com/nina-mir/DigitalOcean-hackathon-FILM-2025)",
         # unsafe_allow_html=True
         # )
+
+         # HELP SECTION
+        with st.expander("ℹ️ How to Use"):
+            st.markdown("""
+            **Ask questions like:**
+            - "Films shot at [location]"
+            - "All [director] movies"
+            - "Which actor appeared most?"
+            - "How many movies from [year]?"
+            
+            **Features:**
+            - 🗺️ Interactive maps
+            - 📊 Downloadable data tables
+            - 💬 Natural language queries
+            """)
+
 
         st.markdown("### 🎯 Quick Start")
 
@@ -373,24 +389,7 @@ def display_sidebar():
                         "📅 Years", f"{int(years.min())}-{int(years.max())}")
         except Exception as e:
             st.info("Stats loading...")
-
-        st.markdown("---")
-
-        # HELP SECTION
-        with st.expander("ℹ️ How to Use"):
-            st.markdown("""
-            **Ask questions like:**
-            - "Films shot at [location]"
-            - "All [director] movies"
-            - "Which actor appeared most?"
-            - "How many movies from [year]?"
-            
-            **Features:**
-            - 🗺️ Interactive maps
-            - 📊 Downloadable data tables
-            - 💬 Natural language queries
-            """)
-
+       
         # RESET BUTTON
         st.markdown("---")
         if st.button("🔄 Clear Chat", use_container_width=True):
